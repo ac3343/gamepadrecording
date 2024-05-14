@@ -12,6 +12,17 @@ var controllers = {};
 var rAF = window.mozRequestAnimationFrame ||
   window.webkitRequestAnimationFrame ||
   window.requestAnimationFrame;
+var savingQueue = [];
+var recordedObject = {
+  frames: 0,
+  ms: [],
+  buttons: [],
+  sticks: []
+}
+onfocus = () => {
+  //savingQueue = [];
+  //console.log("Cleared saving queue");
+};
 
 function connecthandler(e) {
   addgamepad(e.gamepad);
@@ -45,8 +56,26 @@ function addgamepad(gamepad) {
     a.appendChild(e);
   }
   d.appendChild(a);
+
+  var saveButton = document.createElement("button");
+  saveButton.textContent = "Save 60s";
+  saveButton.addEventListener('click', () => {
+    //savingQueue.enqueue()
+    var now = new Date();
+    var fileName = "controller0recording_";
+    fileName += now.getFullYear() + "-";
+    fileName += now.getMonth() + "-";
+    fileName += now.getDate() + "_";
+    fileName += now.getHours() + "-";
+    fileName += now.getMinutes();
+
+    JSONToFile(recordedObject, fileName);
+    console.log("Saved");
+  });
+  d.appendChild(saveButton);
+
   document.getElementById("start").style.display = "none";
-  document.body.appendChild(d);
+  document.body.appendChild(d);  
   rAF(updateStatus);
 }
 
@@ -65,7 +94,9 @@ function updateStatus() {
   for (j in controllers) {
     var controller = controllers[j];
     var d = document.getElementById("controller" + j);
+
     var buttons = d.getElementsByClassName("button");
+    var buttonString = "";
     for (var i=0; i<controller.buttons.length; i++) {
       var b = buttons[i];
       var val = controller.buttons[i];
@@ -86,14 +117,40 @@ function updateStatus() {
       }
       if (touched) {
         b.className += " touched";
+        buttonString += '1';
+      }
+      else{
+        buttonString += '0';
       }
     }
-
+    var axisString = "";
     var axes = d.getElementsByClassName("axis");
     for (var i=0; i<controller.axes.length; i++) {
       var a = axes[i];
       a.innerHTML = i + ": " + controller.axes[i].toFixed(4);
       a.setAttribute("value", controller.axes[i]);
+      var direction = controller.axes[i] >= 0 ? 1 : 0;
+      if(Math.abs(controller.axes[i]) > (2/3)){
+        axisString += controller.axes[i] >= 0 ? 4 : 0;
+      }
+      else if (Math.abs(controller.axes[i]) > (1/3)){
+        axisString += controller.axes[i] >= 0 ? 3 : 1;
+      }
+      else{
+        axisString += '0';
+      }
+    }
+    if(j == 0){
+      recordedObject.buttons.unshift(buttonString);
+      recordedObject.sticks.unshift(axisString);
+      recordedObject.ms.unshift(Date.now());
+      recordedObject.frames++;
+      if(recordedObject.frames > 4500){
+        recordedObject.frames--;
+        recordedObject.ms.pop();
+        recordedObject.buttons.pop();
+        recordedObject.sticks.pop;
+      }
     }
   }
   rAF(updateStatus);
@@ -106,6 +163,18 @@ function scangamepads() {
       controllers[gamepads[i].index] = gamepads[i];
     }
   }
+}
+
+function JSONToFile (obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${filename}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 if (haveEvents) {
